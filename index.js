@@ -13,21 +13,36 @@ async function getRobloxServers(placeId) {
   return data.data || [];
 }
 
+function getColor(playing, max) {
+  const ratio = playing / max;
+  if (ratio >= 0.9) return 0xFF0000;
+  if (ratio >= 0.5) return 0xFFA500;
+  return 0x00FF7F;
+}
+
 function buildServerEmbed(server) {
   const moneyEst = (Math.random() * 20 + 5).toFixed(1);
+  const filled = Math.round((server.playing / server.maxPlayers) * 10);
+  const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+  const color = getColor(server.playing, server.maxPlayers);
 
   const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle(`📍 Servidor Detectado — $${moneyEst}M/s`)
+    .setColor(color)
+    .setTitle('🧠 Steal a Brainrot — Servidor Detectado')
     .addFields(
+      { name: '💰 Generación', value: `$${moneyEst}M/s`, inline: true },
       { name: '👥 Jugadores', value: `${server.playing} / ${server.maxPlayers}`, inline: true },
-      { name: '🔑 ID', value: `\`${server.id}\``, inline: false }
+      { name: '📊 Ocupación', value: `\`${bar}\``, inline: false },
+      { name: '⚡ FPS', value: `${server.fps ? server.fps.toFixed(1) : '?'}`, inline: true },
+      { name: '📶 Ping', value: `${server.ping ?? '?'}ms`, inline: true },
+      { name: '🔑 Job ID', value: `\`${server.id}\``, inline: false }
     )
+    .setFooter({ text: '🤖 Steal a Brainrot Server Finder' })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel('🔗 CLIQUE PARA ENTRAR NO SERVIDOR')
+      .setLabel('🔗 ENTRAR AL SERVIDOR')
       .setStyle(ButtonStyle.Link)
       .setURL(`https://www.roblox.com/games/start?placeId=${PLACE_ID}&gameInstanceId=${server.id}`)
   );

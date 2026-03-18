@@ -12,7 +12,6 @@ const GITHUB_FILE = 'servers.json';
 
 async function getRobloxServers(placeId) {
     const url = `https://games.roblox.com/v1/games/${placeId}/servers/Public?sortOrder=Desc&limit=10`;
-    console.log('Fetching servers from:', url);
     const res = await fetch(url);
     const data = await res.json();
     console.log('Servers found:', data.data ? data.data.length : 0);
@@ -28,9 +27,10 @@ function getColor(playing, max) {
 
 function buildServerEmbed(server) {
     const moneyEst = (Math.random() * 950 + 50).toFixed(0);
-    const filled = Math.round((server.playing / server.maxPlayers) * 10);
+    const playing = Math.min(server.playing, server.maxPlayers);
+    const filled = Math.max(0, Math.min(10, Math.round((playing / server.maxPlayers) * 10)));
     const bar = '🟩'.repeat(filled) + '⬛'.repeat(10 - filled);
-    const color = getColor(server.playing, server.maxPlayers);
+    const color = getColor(playing, server.maxPlayers);
     const fps = server.fps ? server.fps.toFixed(1) : '?';
     const ping = server.ping ?? '?';
 
@@ -43,7 +43,7 @@ function buildServerEmbed(server) {
             { name: '⚡ FPS', value: `\`${fps}\``, inline: true },
             { name: '📶 Ping', value: `\`${ping}ms\``, inline: true },
             { name: '🕐 Detectado', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
-            { name: '🔑 Server ID', value: `\`\`${server.id}\`\``, inline: false }
+            { name: '🔑 Server ID', value: `\`${server.id}\``, inline: false }
         )
         .setFooter({ text: '🤖 Brainrot Server Finder • Actualiza cada 5 min' })
         .setTimestamp();
@@ -63,17 +63,16 @@ function buildServerEmbed(server) {
 }
 
 async function saveToGitHub(servers) {
-    console.log('GITHUB_TOKEN starts with:', GITHUB_TOKEN ? GITHUB_TOKEN.substring(0, 10) : 'UNDEFINED');
-    console.log('GITHUB_REPO:', GITHUB_REPO);
     const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`;
-    console.log('API URL:', apiUrl);
 
     let sha = null;
     try {
         const res = await fetch(apiUrl, {
             headers: {
-                Authorization: `token ${GITHUB_TOKEN}`,
-                'User-Agent': 'roblox-bot'
+                Authorization: `Bearer ${GITHUB_TOKEN}`,
+                'User-Agent': 'roblox-bot',
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28'
             }
         });
         console.log('GET status:', res.status);
@@ -99,9 +98,11 @@ async function saveToGitHub(servers) {
     const res = await fetch(apiUrl, {
         method: 'PUT',
         headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
             'Content-Type': 'application/json',
-            'User-Agent': 'roblox-bot'
+            'User-Agent': 'roblox-bot',
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
         },
         body: JSON.stringify(body)
     });
@@ -115,10 +116,9 @@ async function scanAndPost() {
     console.log('=== scanAndPost started ===');
     try {
         const channel = await client.channels.fetch(CHANNEL_ID);
-        console.log('Channel found:', channel.name);
         const servers = await getRobloxServers(PLACE_ID);
         if (!servers.length) {
-            console.log('No servers found, skipping');
+            console.log('No servers found');
             return;
         }
 
@@ -141,7 +141,7 @@ async function scanAndPost() {
         console.log('=== scanAndPost done ===');
 
     } catch (err) {
-        console.error('scanAndPost error:', err);
+        console.error('scanAndPost error:', err.message);
     }
 }
 

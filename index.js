@@ -6,11 +6,8 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PLACE_ID = process.env.PLACE_ID;
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const GITHUB_USER = process.env.GITHUB_USER;
-const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME;
-const GITHUB_REPO = `${GITHUB_USER}/${GITHUB_REPO_NAME}`;
-const GITHUB_FILE = 'servers.json';
+const JSONBIN_ID = process.env.JSONBIN_ID;
+const JSONBIN_KEY = process.env.JSONBIN_KEY;
 
 async function getRobloxServers(placeId) {
     const url = `https://games.roblox.com/v1/games/${placeId}/servers/Public?sortOrder=Desc&limit=10`;
@@ -64,54 +61,18 @@ function buildServerEmbed(server) {
     return { embed, row, moneyEst, fps, ping };
 }
 
-async function saveToGitHub(servers) {
-    const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`;
-
-    let sha = null;
-    try {
-        const res = await fetch(apiUrl, {
-            headers: {
-                Authorization: `Bearer ${GITHUB_TOKEN}`,
-                'User-Agent': 'roblox-bot',
-                'Accept': 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28'
-            }
-        });
-        console.log('GET status:', res.status);
-        if (res.ok) {
-            const data = await res.json();
-            sha = data.sha;
-            console.log('SHA found:', sha);
-        } else {
-            const err = await res.json();
-            console.log('GET error:', JSON.stringify(err));
-        }
-    } catch (e) {
-        console.log('GET exception:', e.message);
-    }
-
-    const content = Buffer.from(JSON.stringify(servers, null, 2)).toString('base64');
-    const body = {
-        message: 'update servers.json',
-        content,
-        ...(sha ? { sha } : {})
-    };
-
-    const res = await fetch(apiUrl, {
+async function saveToJsonbin(serverList) {
+    const url = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
+    const res = await fetch(url, {
         method: 'PUT',
         headers: {
-            Authorization: `Bearer ${GITHUB_TOKEN}`,
             'Content-Type': 'application/json',
-            'User-Agent': 'roblox-bot',
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28'
+            'X-Master-Key': JSONBIN_KEY
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ servers: serverList })
     });
-
-    console.log('PUT status:', res.status);
-    const result = await res.json();
-    console.log('PUT result:', JSON.stringify(result).substring(0, 200));
+    const data = await res.json();
+    console.log('Jsonbin save:', res.status, data.metadata ? 'OK' : JSON.stringify(data));
 }
 
 async function scanAndPost() {
@@ -139,7 +100,7 @@ async function scanAndPost() {
             });
         }
 
-        await saveToGitHub(serverList);
+        await saveToJsonbin(serverList);
         console.log('=== scanAndPost done ===');
 
     } catch (err) {

@@ -7,7 +7,9 @@ const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PLACE_ID = process.env.PLACE_ID;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const GITHUB_REPO = process.env.GITHUB_REPO;
+const GITHUB_USER = process.env.GITHUB_USER;
+const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME;
+const GITHUB_REPO = `${GITHUB_USER}/${GITHUB_REPO_NAME}`;
 const GITHUB_FILE = 'servers.json';
 
 async function getRobloxServers(placeId) {

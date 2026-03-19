@@ -8,6 +8,7 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 const PLACE_ID = process.env.PLACE_ID;
 const JSONBIN_ID = process.env.JSONBIN_ID;
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
+const CHANNEL_ID = process.env.CHANNEL_ID2;
 
 async function getRobloxServers(placeId) {
     let all = [];

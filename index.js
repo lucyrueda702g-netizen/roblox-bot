@@ -1,10 +1,17 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fetch = require('node-fetch');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ 
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ] 
+});
 
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
+const SAB_CHANNEL_ID = "1476956889693687993";
 const PLACE_ID = process.env.PLACE_ID;
 const JSONBIN_ID = process.env.JSONBIN_ID;
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
@@ -22,7 +29,6 @@ async function getRobloxServers(placeId) {
         cursor = data.nextPageCursor;
         if (!cursor || servers.length === 0) break;
     }
-    console.log('Servers fetched:', all.length);
     return all.slice(0, 50);
 }
 
@@ -46,53 +52,6 @@ function getRarity(playing, max) {
     return '`None`';
 }
 
-function buildServerEmbed(server, others) {
-    const moneyEst = calcCash(server);
-    const playing = Math.min(server.playing, server.maxPlayers);
-    const color = getColor(playing, server.maxPlayers);
-    const fps = server.fps ? server.fps.toFixed(1) : '?';
-    const ping = server.ping ?? '?';
-    const rarity = getRarity(playing, server.maxPlayers);
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    const joinURL = `https://liphyrdev.github.io/notifier/?placeld=${PLACE_ID}&gameInstanceId=${server.id}`;
-
-    let othersList = '';
-    others.slice(0, 5).forEach((s, i) => {
-        const rar = getRarity(s.playing, s.maxPlayers);
-        const c = calcCash(s);
-        othersList += `${i + 1}.  $${c}M/s — FPS: ${s.fps ? s.fps.toFixed(1) : '?'}\n    ${rar}\n`;
-    });
-    if (!othersList) othersList = 'Ninguno';
-
-    const embed = new EmbedBuilder()
-        .setColor(color)
-        .setTitle(`⚡ Servidor Detectado! [$${moneyEst}M/s]`)
-        .addFields(
-            { name: '\u200b', value: rarity, inline: false },
-            { name: '**Otros Servidores Detectados** 🍀', value: othersList, inline: false },
-            { name: 'ENTRAR AL SERVIDOR', value: `[UNIRSE](${joinURL})`, inline: false },
-            { name: 'Estado base', value: '```\nSeguro\n```', inline: false },
-            { name: 'BOT', value: `\`\`\`\n${client.user?.username || 'H7K NOT'}\n\`\`\``, inline: false },
-            { name: '👤 Players', value: `\`\`\`\n${server.playing} / ${server.maxPlayers}\n\`\`\``, inline: false },
-        )
-        .setFooter({ text: `H7K NOT | Hoy a las ${timeStr}` })
-        .setTimestamp();
-
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setLabel('🚀 ENTRAR AL SERVIDOR')
-            .setStyle(ButtonStyle.Link)
-            .setURL(`https://www.roblox.com/games/start?placeId=${PLACE_ID}&gameInstanceId=${server.id}`),
-        new ButtonBuilder()
-            .setLabel('👾 Ver Juego')
-            .setStyle(ButtonStyle.Link)
-            .setURL(`https://www.roblox.com/games/${PLACE_ID}`)
-    );
-
-    return { embed, row, moneyEst };
-}
-
 async function saveToJsonbin(serverList) {
     const url = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
     const res = await fetch(url, {
@@ -104,15 +63,122 @@ async function saveToJsonbin(serverList) {
     console.log('Jsonbin save:', res.status, data.metadata ? 'OK' : JSON.stringify(data));
 }
 
+// Extraer Server ID del mensaje de SAB
+function extractServerID(message) {
+    // Buscar en los embeds
+    if (message.embeds && message.embeds.length > 0) {
+        for (const embed of message.embeds) {
+            // Buscar en los botones
+            if (message.components && message.components.length > 0) {
+                for (const row of message.components) {
+                    for (const component of row.components) {
+                        if (component.url) {
+                            const match = component.url.match(/gameInstanceId=([a-f0-9-]+)/i);
+                            if (match) return match[1];
+                        }
+                    }
+                }
+            }
+            // Buscar en descripcion o fields
+            const text = (embed.description || '') + JSON.stringify(embed.fields || []);
+            const match = text.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+            if (match) return match[1];
+        }
+    }
+    // Buscar en el contenido del mensaje
+    const match = message.content.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+    if (match) return match[1];
+    return null;
+}
+
+// Extraer brainrot del mensaje de SAB
+function extractBrainrot(message) {
+    if (message.embeds && message.embeds.length > 0) {
+        const embed = message.embeds[0];
+        const desc = embed.description || embed.title || '';
+        const match = desc.match(/^(.+?)\s*—/);
+        if (match) return match[1].trim();
+    }
+    return "Brainrot detectado";
+}
+
+async function sendToMyChannel(serverID, brainrot, cash) {
+    try {
+        const channel = await client.channels.fetch(CHANNEL_ID);
+        const joinURL = `https://liphyrdev.github.io/notifier/?placeld=${PLACE_ID}&gameInstanceId=${serverID}`;
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00CC44)
+            .setTitle(`⚡ ${brainrot} [$${cash}M/s]`)
+            .addFields(
+                { name: 'ENTRAR AL SERVIDOR', value: `[UNIRSE](${joinURL})`, inline: false },
+                { name: 'Estado base', value: '```\nSeguro\n```', inline: false },
+                { name: 'BOT', value: '```\nH7K NOT\n```', inline: false },
+                { name: '🔑 Server ID', value: `\`${serverID}\``, inline: false },
+            )
+            .setFooter({ text: `H7K NOT | SAB Finder • Hoy a las ${timeStr}` })
+            .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setLabel('🚀 ENTRAR AL SERVIDOR')
+                .setStyle(ButtonStyle.Link)
+                .setURL(`https://www.roblox.com/games/start?placeId=${PLACE_ID}&gameInstanceId=${serverID}`),
+            new ButtonBuilder()
+                .setLabel('👾 Ver Juego')
+                .setStyle(ButtonStyle.Link)
+                .setURL(`https://www.roblox.com/games/${PLACE_ID}`)
+        );
+
+        await channel.send({ embeds: [embed], components: [row] });
+        console.log('Sent to my channel:', brainrot, serverID);
+    } catch (err) {
+        console.error('Error sending to channel:', err.message);
+    }
+}
+
+// Escuchar mensajes de SAB
+client.on('messageCreate', async (message) => {
+    if (message.channelId !== SAB_CHANNEL_ID) return;
+    if (!message.author.bot) return;
+
+    console.log('SAB message received from:', message.author.username);
+
+    const serverID = extractServerID(message);
+    if (!serverID) {
+        console.log('No server ID found in message');
+        return;
+    }
+
+    const brainrot = extractBrainrot(message);
+    const cash = (Math.random() * 500 + 500).toFixed(1);
+
+    console.log('Found:', brainrot, serverID);
+
+    // Guardar en jsonbin para hub
+    await saveToJsonbin([{
+        id: serverID,
+        brainrot: brainrot,
+        cash: cash,
+        players: "?/?",
+        fps: "?",
+        ping: "?",
+        timestamp: Date.now()
+    }]);
+
+    // Mandar a tu canal
+    await sendToMyChannel(serverID, brainrot, cash);
+});
+
+// Escaneo normal cada 1 min
 async function scanAndPost() {
     console.log('=== scanAndPost started ===');
     try {
         const channel = await client.channels.fetch(CHANNEL_ID);
         const servers = await getRobloxServers(PLACE_ID);
-        if (!servers.length) {
-            console.log('No servers found');
-            return;
-        }
+        if (!servers.length) return;
 
         const sorted = servers
             .map(s => ({ ...s, cashEst: parseFloat(calcCash(s)) }))
@@ -120,11 +186,45 @@ async function scanAndPost() {
 
         const top = sorted[0];
         const others = sorted.slice(1);
+        const joinURL = `https://liphyrdev.github.io/notifier/?placeld=${PLACE_ID}&gameInstanceId=${top.id}`;
+        const rarity = getRarity(top.playing, top.maxPlayers);
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
-        const { embed, row, moneyEst } = buildServerEmbed(top, others);
+        let othersList = '';
+        others.slice(0, 4).forEach((s, i) => {
+            othersList += `${i + 1}. $${calcCash(s)}M/s — ${getRarity(s.playing, s.maxPlayers)}\n`;
+        });
+        if (!othersList) othersList = 'Ninguno';
+
+        const embed = new EmbedBuilder()
+            .setColor(getColor(top.playing, top.maxPlayers))
+            .setTitle(`⚡ Servidor Detectado! [$${top.cashEst}M/s]`)
+            .addFields(
+                { name: '\u200b', value: rarity, inline: false },
+                { name: '**Otros Servidores** 🍀', value: othersList, inline: false },
+                { name: 'ENTRAR AL SERVIDOR', value: `[UNIRSE](${joinURL})`, inline: false },
+                { name: 'Estado base', value: '```\nSeguro\n```', inline: false },
+                { name: 'BOT', value: `\`\`\`\n${client.user?.username || 'H7K NOT'}\n\`\`\``, inline: false },
+                { name: '👤 Players', value: `\`\`\`\n${top.playing} / ${top.maxPlayers}\n\`\`\``, inline: false },
+            )
+            .setFooter({ text: `H7K NOT | Hoy a las ${timeStr}` })
+            .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setLabel('🚀 ENTRAR AL SERVIDOR')
+                .setStyle(ButtonStyle.Link)
+                .setURL(`https://www.roblox.com/games/start?placeId=${PLACE_ID}&gameInstanceId=${top.id}`),
+            new ButtonBuilder()
+                .setLabel('👾 Ver Juego')
+                .setStyle(ButtonStyle.Link)
+                .setURL(`https://www.roblox.com/games/${PLACE_ID}`)
+        );
+
         await channel.send({ embeds: [embed], components: [row] });
 
-        const serverList = sorted.slice(0, 3).map(s => ({
+        await saveToJsonbin(sorted.slice(0, 3).map(s => ({
             id: s.id,
             cash: calcCash(s),
             players: `${s.playing}/${s.maxPlayers}`,
@@ -132,12 +232,9 @@ async function scanAndPost() {
             ping: s.ping ?? '?',
             brainrot: "Detectando...",
             timestamp: Date.now()
-        }));
+        })));
 
-        await saveToJsonbin(serverList);
-        console.log('Top cash:', moneyEst + 'M/s');
         console.log('=== scanAndPost done ===');
-
     } catch (err) {
         console.error('scanAndPost error:', err.message);
     }
@@ -146,7 +243,7 @@ async function scanAndPost() {
 client.once('ready', () => {
     console.log(`Bot listo: ${client.user.tag}`);
     scanAndPost();
-    setInterval(scanAndPost, 30 * 1000);
+    setInterval(scanAndPost, 1 * 60 * 1000);
 });
 
 client.login(TOKEN);

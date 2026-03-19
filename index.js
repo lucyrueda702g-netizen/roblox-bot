@@ -10,11 +10,20 @@ const JSONBIN_ID = process.env.JSONBIN_ID;
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
 
 async function getRobloxServers(placeId) {
-    const url = `https://games.roblox.com/v1/games/${placeId}/servers/Public?sortOrder=Desc&limit=10`;
-    const res = await fetch(url);
-    const data = await res.json();
-    console.log('Servers found:', data.data ? data.data.length : 0);
-    return data.data || [];
+    let allServers = [];
+    let cursor = null;
+    while (allServers.length < 50) {
+        let url = `https://games.roblox.com/v1/games/${placeId}/servers/Public?sortOrder=Desc&limit=25`;
+        if (cursor) url += `&cursor=${cursor}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const servers = data.data || [];
+        allServers = allServers.concat(servers);
+        cursor = data.nextPageCursor;
+        if (!cursor || servers.length === 0) break;
+    }
+    console.log('Total servers fetched:', allServers.length);
+    return allServers.slice(0, 50);
 }
 
 function getColor(playing, max) {
@@ -24,8 +33,14 @@ function getColor(playing, max) {
     return 0x00FF7F;
 }
 
-function buildServerEmbed(server) {
-    const moneyEst = (Math.random() * 950 + 50).toFixed(0);
+function calcCash(server) {
+    const base = (Math.random() * 200 + 800);
+    const playerBonus = (server.playing / server.maxPlayers) * 500;
+    return Math.floor(base + playerBonus);
+}
+
+function buildServerEmbed(server, rank) {
+    const moneyEst = calcCash(server);
     const playing = Math.min(server.playing, server.maxPlayers);
     const filled = Math.max(0, Math.min(10, Math.round((playing / server.maxPlayers) * 10)));
     const bar = '🟩'.repeat(filled) + '⬛'.repeat(10 - filled);
@@ -36,7 +51,7 @@ function buildServerEmbed(server) {
     const embed = new EmbedBuilder()
         .setColor(color)
         .setAuthor({ name: '🧠 STEAL A BRAINROT', iconURL: 'https://tr.rbxcdn.com/180DAY-placeholder/150/150/Image/Png/noFilter' })
-        .setTitle('⚡ Servidor Detectado!')
+        .setTitle(`⚡ #${rank} Servidor Detectado!`)
         .setDescription(`> 💰 **Generación estimada: $${moneyEst}M/s**\n> ${bar}\n> 👤 **${server.playing} / ${server.maxPlayers}**`)
         .addFields(
             { name: '⚡ FPS', value: `\`${fps}\``, inline: true },
@@ -85,22 +100,33 @@ async function scanAndPost() {
             return;
         }
 
+        const serversWithCash = servers.map(s => ({
+            ...s,
+            cashEst: calcCash(s)
+        }));
+
+        serversWithCash.sort((a, b) => b.cashEst - a.cashEst);
+        const top3 = serversWithCash.slice(0, 3);
         const serverList = [];
-        for (const server of servers) {
-            const { embed, row, moneyEst, fps, ping } = buildServerEmbed(server);
+
+        for (let i = 0; i < top3.length; i++) {
+            const server = top3[i];
+            const { embed, row, fps, ping } = buildServerEmbed(server, i + 1);
             await channel.send({ embeds: [embed], components: [row] });
             await new Promise(r => setTimeout(r, 500));
             serverList.push({
                 id: server.id,
-                cash: moneyEst,
+                cash: server.cashEst,
                 players: `${server.playing}/${server.maxPlayers}`,
                 fps: fps,
                 ping: ping,
+                brainrot: "Detectando...",
                 timestamp: Date.now()
             });
         }
 
         await saveToJsonbin(serverList);
+        console.log('Top server cash:', serverList[0]?.cash + 'M/s');
         console.log('=== scanAndPost done ===');
 
     } catch (err) {

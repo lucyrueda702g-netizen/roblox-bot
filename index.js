@@ -43,23 +43,26 @@ function buildServerEmbed(server, rank) {
     const moneyEst = calcCash(server);
     const playing = Math.min(server.playing, server.maxPlayers);
     const filled = Math.max(0, Math.min(10, Math.round((playing / server.maxPlayers) * 10)));
-    const bar = '🟩'.repeat(filled) + '⬛'.repeat(10 - filled);
     const color = getColor(playing, server.maxPlayers);
     const fps = server.fps ? server.fps.toFixed(1) : '?';
     const ping = server.ping ?? '?';
+    const rarity = playing / server.maxPlayers >= 0.8 ? '🪬`Diamond`' : playing / server.maxPlayers >= 0.5 ? '🪬`Gold`' : '`None`';
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
+    const joinURL = `https://liphyrdev.github.io/notifier/?placeld=${PLACE_ID}&gameInstanceId=${server.id}`;
 
     const embed = new EmbedBuilder()
         .setColor(color)
-        .setAuthor({ name: '🧠 STEAL A BRAINROT', iconURL: 'https://tr.rbxcdn.com/180DAY-placeholder/150/150/Image/Png/noFilter' })
-        .setTitle(`⚡ #${rank} Servidor Detectado!`)
-        .setDescription(`> 💰 **Generación estimada: $${moneyEst}M/s**\n> ${bar}\n> 👤 **${server.playing} / ${server.maxPlayers}**`)
+        .setTitle(`⚡ Servidor Detectado! [$${moneyEst}M/s]`)
         .addFields(
-            { name: '⚡ FPS', value: `\`${fps}\``, inline: true },
-            { name: '📶 Ping', value: `\`${ping}ms\``, inline: true },
-            { name: '🕐 Detectado', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
-            { name: '🔑 Server ID', value: `\`${server.id}\``, inline: false }
+            { name: '\u200b', value: rarity, inline: false },
+            { name: '**Otros Servidores Detectados** 🍀', value: `FPS: \`${fps}\` | Ping: \`${ping}ms\``, inline: false },
+            { name: 'ENTRAR AL SERVIDOR', value: `[UNIRSE](${joinURL})`, inline: false },
+            { name: 'Estado base', value: '```\nSeguro\n```', inline: false },
+            { name: 'BOT', value: `\`\`\`\n${client.user?.username || 'H7K NOT'}\n\`\`\``, inline: false },
+            { name: '👤 Players', value: `\`\`\`\n${server.playing} / ${server.maxPlayers}\n\`\`\``, inline: false },
         )
-        .setFooter({ text: '🤖 Brainrot Server Finder • Actualiza cada 5 min' })
+        .setFooter({ text: `H7K NOT | Hoy a las ${timeStr}` })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
@@ -74,70 +77,3 @@ function buildServerEmbed(server, rank) {
     );
 
     return { embed, row, moneyEst, fps, ping };
-}
-
-async function saveToJsonbin(serverList) {
-    const url = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
-    const res = await fetch(url, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Master-Key': JSONBIN_KEY
-        },
-        body: JSON.stringify({ servers: serverList })
-    });
-    const data = await res.json();
-    console.log('Jsonbin save:', res.status, data.metadata ? 'OK' : JSON.stringify(data));
-}
-
-async function scanAndPost() {
-    console.log('=== scanAndPost started ===');
-    try {
-        const channel = await client.channels.fetch(CHANNEL_ID);
-        const servers = await getRobloxServers(PLACE_ID);
-        if (!servers.length) {
-            console.log('No servers found');
-            return;
-        }
-
-        const serversWithCash = servers.map(s => ({
-            ...s,
-            cashEst: calcCash(s)
-        }));
-
-        serversWithCash.sort((a, b) => b.cashEst - a.cashEst);
-        const top3 = serversWithCash.slice(0, 3);
-        const serverList = [];
-
-        for (let i = 0; i < top3.length; i++) {
-            const server = top3[i];
-            const { embed, row, fps, ping } = buildServerEmbed(server, i + 1);
-            await channel.send({ embeds: [embed], components: [row] });
-            await new Promise(r => setTimeout(r, 500));
-            serverList.push({
-                id: server.id,
-                cash: server.cashEst,
-                players: `${server.playing}/${server.maxPlayers}`,
-                fps: fps,
-                ping: ping,
-                brainrot: "Detectando...",
-                timestamp: Date.now()
-            });
-        }
-
-        await saveToJsonbin(serverList);
-        console.log('Top server cash:', serverList[0]?.cash + 'M/s');
-        console.log('=== scanAndPost done ===');
-
-    } catch (err) {
-        console.error('scanAndPost error:', err.message);
-    }
-}
-
-client.once('ready', () => {
-    console.log(`Bot listo: ${client.user.tag}`);
-    scanAndPost();
-    setInterval(scanAndPost, 5 * 60 * 1000);
-});
-
-client.login(TOKEN);

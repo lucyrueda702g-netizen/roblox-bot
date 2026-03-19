@@ -146,7 +146,7 @@ async function scanAndPost() {
 client.once('ready', () => {
     console.log(`Bot listo: ${client.user.tag}`);
     scanAndPost();
-    setInterval(scanAndPost, 1 * 60 * 1000);
+    setInterval(scanAndPost, 30 * 1000);
 });
 
 client.login(TOKEN);

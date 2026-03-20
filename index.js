@@ -64,22 +64,29 @@ async function saveToJsonbin(serverList) {
 }
 
 async function extractServerID(message) {
+    // Debug completo
+    console.log('Components raw:', JSON.stringify(message.components));
+    console.log('Embeds raw:', JSON.stringify(message.embeds));
+
     // Buscar en botones
     if (message.components && message.components.length > 0) {
         for (const row of message.components) {
-            for (const component of row.components) {
-                if (component.url) {
-                    // Link de petmart.fun con gameInstanceId codificado
-                    const decoded = decodeURIComponent(component.url);
+            const comps = row.components || [];
+            for (const component of comps) {
+                const url = component.url || component.data?.url || '';
+                if (url) {
+                    console.log('Button URL:', url);
+                    const decoded = decodeURIComponent(url);
+                    console.log('Decoded URL:', decoded);
                     const match = decoded.match(/gameInstanceId=([a-f0-9-]{36})/i);
                     if (match) return match[1];
-                    // Link directo
-                    const match2 = component.url.match(/gameInstanceId=([a-f0-9-]{36})/i);
+                    const match2 = url.match(/gameInstanceId=([a-f0-9-]{36})/i);
                     if (match2) return match2[1];
                 }
             }
         }
     }
+
     // Buscar en embeds
     if (message.embeds && message.embeds.length > 0) {
         for (const embed of message.embeds) {
@@ -91,6 +98,14 @@ async function extractServerID(message) {
             if (match2) return match2[1];
         }
     }
+
+    // Buscar en content
+    if (message.content) {
+        const decoded = decodeURIComponent(message.content);
+        const match = decoded.match(/gameInstanceId=([a-f0-9-]{36})/i);
+        if (match) return match[1];
+    }
+
     return null;
 }
 

@@ -10,7 +10,7 @@ const client = new Client({
 });
 
 const TOKEN = process.env.TOKEN;
-const SAB_CHANNEL_ID = process.env.CHANNEL_ID;
+const CHANNEL_ID = process.env.CHANNEL_ID;
 const SAB_CHANNEL_ID = process.env.SAB_CHANNEL_ID;
 const PLACE_ID = process.env.PLACE_ID;
 const JSONBIN_ID = process.env.JSONBIN_ID;
@@ -63,43 +63,50 @@ async function saveToJsonbin(serverList) {
     console.log('Jsonbin save:', res.status, data.metadata ? 'OK' : JSON.stringify(data));
 }
 
-// Extraer Server ID del mensaje de SAB
 function extractServerID(message) {
-    // Buscar en los embeds
-    if (message.embeds && message.embeds.length > 0) {
-        for (const embed of message.embeds) {
-            // Buscar en los botones
-            if (message.components && message.components.length > 0) {
-                for (const row of message.components) {
-                    for (const component of row.components) {
-                        if (component.url) {
-                            const match = component.url.match(/gameInstanceId=([a-f0-9-]+)/i);
-                            if (match) return match[1];
-                        }
-                    }
+    if (message.components && message.components.length > 0) {
+        for (const row of message.components) {
+            for (const component of row.components) {
+                if (component.url) {
+                    const match = component.url.match(/gameInstanceId=([a-f0-9-]+)/i);
+                    if (match) return match[1];
                 }
             }
-            // Buscar en descripcion o fields
+        }
+    }
+    if (message.embeds && message.embeds.length > 0) {
+        for (const embed of message.embeds) {
             const text = (embed.description || '') + JSON.stringify(embed.fields || []);
             const match = text.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
             if (match) return match[1];
         }
     }
-    // Buscar en el contenido del mensaje
     const match = message.content.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
     if (match) return match[1];
     return null;
 }
 
-// Extraer brainrot del mensaje de SAB
 function extractBrainrot(message) {
     if (message.embeds && message.embeds.length > 0) {
         const embed = message.embeds[0];
         const desc = embed.description || embed.title || '';
-        const match = desc.match(/^(.+?)\s*—/);
-        if (match) return match[1].trim();
+        const lines = desc.split('\n');
+        if (lines.length > 0) {
+            const match = lines[0].match(/^(.+?)\s*—/);
+            if (match) return match[1].trim();
+        }
     }
     return "Brainrot detectado";
+}
+
+function extractCash(message) {
+    if (message.embeds && message.embeds.length > 0) {
+        const embed = message.embeds[0];
+        const desc = embed.description || '';
+        const match = desc.match(/\$([0-9,.]+[MBK]?)\/s/i);
+        if (match) return match[1];
+    }
+    return "?";
 }
 
 async function sendToMyChannel(serverID, brainrot, cash) {
@@ -111,7 +118,7 @@ async function sendToMyChannel(serverID, brainrot, cash) {
 
         const embed = new EmbedBuilder()
             .setColor(0x00CC44)
-            .setTitle(`⚡ ${brainrot} [$${cash}M/s]`)
+            .setTitle(`⚡ ${brainrot} [$${cash}/s]`)
             .addFields(
                 { name: 'ENTRAR AL SERVIDOR', value: `[UNIRSE](${joinURL})`, inline: false },
                 { name: 'Estado base', value: '```\nSeguro\n```', inline: false },
@@ -139,7 +146,6 @@ async function sendToMyChannel(serverID, brainrot, cash) {
     }
 }
 
-// Escuchar mensajes de SAB
 client.on('messageCreate', async (message) => {
     if (message.channelId !== SAB_CHANNEL_ID) return;
     if (!message.author.bot) return;
@@ -153,11 +159,10 @@ client.on('messageCreate', async (message) => {
     }
 
     const brainrot = extractBrainrot(message);
-    const cash = (Math.random() * 500 + 500).toFixed(1);
+    const cash = extractCash(message);
 
-    console.log('Found:', brainrot, serverID);
+    console.log('Found:', brainrot, cash, serverID);
 
-    // Guardar en jsonbin para hub
     await saveToJsonbin([{
         id: serverID,
         brainrot: brainrot,
@@ -168,11 +173,9 @@ client.on('messageCreate', async (message) => {
         timestamp: Date.now()
     }]);
 
-    // Mandar a tu canal
     await sendToMyChannel(serverID, brainrot, cash);
 });
 
-// Escaneo normal cada 1 min
 async function scanAndPost() {
     console.log('=== scanAndPost started ===');
     try {
@@ -185,14 +188,13 @@ async function scanAndPost() {
             .sort((a, b) => b.cashEst - a.cashEst);
 
         const top = sorted[0];
-        const others = sorted.slice(1);
         const joinURL = `https://liphyrdev.github.io/notifier/?placeld=${PLACE_ID}&gameInstanceId=${top.id}`;
         const rarity = getRarity(top.playing, top.maxPlayers);
         const now = new Date();
         const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
         let othersList = '';
-        others.slice(0, 4).forEach((s, i) => {
+        sorted.slice(1, 5).forEach((s, i) => {
             othersList += `${i + 1}. $${calcCash(s)}M/s — ${getRarity(s.playing, s.maxPlayers)}\n`;
         });
         if (!othersList) othersList = 'Ninguno';
@@ -226,11 +228,11 @@ async function scanAndPost() {
 
         await saveToJsonbin(sorted.slice(0, 3).map(s => ({
             id: s.id,
+            brainrot: "Detectando...",
             cash: calcCash(s),
             players: `${s.playing}/${s.maxPlayers}`,
             fps: s.fps ? s.fps.toFixed(1) : '?',
             ping: s.ping ?? '?',
-            brainrot: "Detectando...",
             timestamp: Date.now()
         })));
 

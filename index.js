@@ -10,7 +10,7 @@ const client = new Client({
 });
 
 const TOKEN = process.env.TOKEN;
-const CHANNEL_ID = process.env.CHANNEL_ID;
+const SAB_CHANNEL_ID = process.env.SAB_CHANNEL_ID;
 const SAB_CHANNEL_ID = "1476956889693687993";
 const PLACE_ID = process.env.PLACE_ID;
 const JSONBIN_ID = process.env.JSONBIN_ID;

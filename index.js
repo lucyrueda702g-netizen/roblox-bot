@@ -63,119 +63,97 @@ async function saveToJsonbin(serverList) {
     console.log('Jsonbin save:', res.status, data.metadata ? 'OK' : JSON.stringify(data));
 }
 
-// ─── FUNCIÓN ARREGLADA ───────────────────────────────────────────────
-async function extractServerID(message) {
-    const UUID_REGEX = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i;
-
-    // Función helper: intenta extraer UUID de un string con múltiples decodings
-    function findUUID(raw) {
-        if (!raw) return null;
-
-        // Intentar hasta 3 niveles de URL decode
-        let texts = [raw];
-        let current = raw;
-        for (let i = 0; i < 3; i++) {
-            try {
-                const decoded = decodeURIComponent(current);
-                if (decoded !== current) {
-                    texts.push(decoded);
-                    current = decoded;
-                } else break;
-            } catch { break; }
-        }
-
-        for (const text of texts) {
-            // Buscar gameInstanceId= primero (más específico)
-            const match = text.match(/gameInstanceId=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
-            if (match) {
-                console.log('✅ Found via gameInstanceId=', match[1]);
-                return match[1];
-            }
-        }
-
-        // Si hay un link= o redirect= que apunta a roblox, extraer de ahí
-        for (const text of texts) {
-            const linkMatch = text.match(/(?:link|redirect|url)=([^&\s]+)/i);
-            if (linkMatch) {
-                const innerResult = findUUID(linkMatch[1]);
-                if (innerResult) return innerResult;
-            }
-        }
-
-        // Último recurso: cualquier UUID en el texto decodificado completamente
-        const lastText = texts[texts.length - 1];
-        // Solo si menciona roblox cerca del UUID
-        if (lastText.toLowerCase().includes('roblox')) {
-            const match = lastText.match(UUID_REGEX);
-            if (match) {
-                console.log('✅ Found via fallback UUID in roblox context:', match[1]);
-                return match[1];
-            }
-        }
-
-        return null;
+// ─── BUSCAR UUID EN CUALQUIER STRING CON MULTI-DECODE ───
+function findUUID(raw) {
+    if (!raw) return null;
+    let texts = [raw];
+    let current = String(raw);
+    for (let i = 0; i < 4; i++) {
+        try {
+            const decoded = decodeURIComponent(current);
+            if (decoded !== current) { texts.push(decoded); current = decoded; }
+            else break;
+        } catch { break; }
     }
-
-    // 1. Buscar en componentes (botones)
-    if (message.components && message.components.length > 0) {
-        for (const row of message.components) {
-            const comps = row.components || [];
-            for (const comp of comps) {
-                // discord.js v14 puede tener la URL en diferentes lugares
-                const url = comp.url 
-                    || comp.data?.url 
-                    || comp.toJSON?.()?.url 
-                    || '';
-                
-                if (url) {
-                    console.log('🔍 Button URL encontrada:', url.substring(0, 100) + '...');
-                    const result = findUUID(url);
-                    if (result) return result;
-                }
-            }
+    for (const text of texts) {
+        // Buscar gameInstanceId= primero
+        const m = text.match(/gameInstanceId=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+        if (m) { console.log('✅ UUID via gameInstanceId:', m[1]); return m[1]; }
+    }
+    // Buscar redirect/link interno
+    for (const text of texts) {
+        const lm = text.match(/(?:link|redirect|url)=([^&\s"']+)/i);
+        if (lm) {
+            const inner = findUUID(lm[1]);
+            if (inner) return inner;
         }
     }
-
-    // 2. Buscar en embeds (description, fields, url, author)
-    if (message.embeds && message.embeds.length > 0) {
-        for (const embed of message.embeds) {
-            // Revisar cada parte del embed por separado
-            const parts = [
-                embed.description,
-                embed.url,
-                embed.title,
-                ...(embed.fields || []).map(f => f.value),
-                embed.author?.url,
-                embed.footer?.text,
-            ].filter(Boolean);
-
-            for (const part of parts) {
-                const result = findUUID(part);
-                if (result) return result;
-            }
-
-            // También serializar el embed completo como JSON
-            const embedJson = JSON.stringify(embed);
-            const result = findUUID(embedJson);
-            if (result) return result;
-        }
+    // Fallback UUID en contexto roblox
+    const last = texts[texts.length - 1];
+    if (last.toLowerCase().includes('roblox')) {
+        const m2 = last.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+        if (m2) { console.log('✅ UUID fallback roblox:', m2[1]); return m2[1]; }
     }
-
-    // 3. Buscar en content del mensaje
-    if (message.content) {
-        const result = findUUID(message.content);
-        if (result) return result;
-    }
-
-    // 4. Log de debug si no encontró nada
-    console.log('❌ No UUID found. Components JSON:');
-    console.log(JSON.stringify(message.components?.map(r => 
-        r.components?.map(c => ({ url: c.url || c.data?.url }))
-    )));
-
     return null;
 }
-// ─────────────────────────────────────────────────────────────────────
+
+// ─── EXTRAER SERVER ID ───────────────────────────────────
+async function extractServerID(message) {
+
+    // 1. Serializar el mensaje RAW completo a JSON y buscar ahí
+    //    Esto agarra CUALQUIER url aunque discord.js no la exponga bien
+    try {
+        const raw = JSON.stringify(message.toJSON ? message.toJSON() : message);
+        console.log('🔍 RAW JSON length:', raw.length);
+        const result = findUUID(raw);
+        if (result) return result;
+    } catch(e) {
+        console.log('toJSON error:', e.message);
+    }
+
+    // 2. Iterar components a mano buscando todas las keys posibles
+    if (message.components && message.components.length > 0) {
+        for (const row of message.components) {
+            // Intentar acceder via toJSON
+            let rowJson = {};
+            try { rowJson = row.toJSON ? row.toJSON() : row; } catch {}
+            const rowStr = JSON.stringify(rowJson);
+            const r1 = findUUID(rowStr);
+            if (r1) return r1;
+
+            // Componentes hijos
+            const children = row.components || rowJson.components || [];
+            for (const comp of children) {
+                let compJson = {};
+                try { compJson = comp.toJSON ? comp.toJSON() : comp; } catch {}
+                const compStr = JSON.stringify(compJson);
+                console.log('🔘 Component JSON:', compStr.substring(0, 200));
+                const r2 = findUUID(compStr);
+                if (r2) return r2;
+            }
+        }
+    }
+
+    // 3. Embeds completos
+    if (message.embeds && message.embeds.length > 0) {
+        for (const embed of message.embeds) {
+            let embedJson = {};
+            try { embedJson = embed.toJSON ? embed.toJSON() : embed; } catch {}
+            const embedStr = JSON.stringify(embedJson);
+            const r3 = findUUID(embedStr);
+            if (r3) return r3;
+        }
+    }
+
+    // 4. Content
+    if (message.content) {
+        const r4 = findUUID(message.content);
+        if (r4) return r4;
+    }
+
+    console.log('❌ No UUID found después de todos los intentos');
+    return null;
+}
 
 function extractBrainrot(message) {
     if (message.embeds && message.embeds.length > 0) {
@@ -186,7 +164,6 @@ function extractBrainrot(message) {
             const match = lines[0].match(/^\*{0,2}(.+?)\s*[—\-–]/);
             if (match) return match[1].replace(/\*/g, '').trim();
         }
-        // Fallback: primera línea limpia
         if (lines[0]) return lines[0].replace(/\*/g, '').trim().substring(0, 40);
     }
     return "Brainrot detectado";

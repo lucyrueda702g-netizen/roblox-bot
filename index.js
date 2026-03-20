@@ -64,32 +64,31 @@ async function saveToJsonbin(serverList) {
 }
 
 async function extractServerID(message) {
+    // Buscar en botones
     if (message.components && message.components.length > 0) {
         for (const row of message.components) {
             for (const component of row.components) {
                 if (component.url) {
-                    const match = component.url.match(/gameInstanceId=([a-f0-9-]+)/i);
+                    // Link de petmart.fun con gameInstanceId codificado
+                    const decoded = decodeURIComponent(component.url);
+                    const match = decoded.match(/gameInstanceId=([a-f0-9-]{36})/i);
                     if (match) return match[1];
-                    try {
-                        const res = await fetch(component.url, { method: 'GET', redirect: 'follow' });
-                        const finalUrl = res.url;
-                        const match2 = finalUrl.match(/gameInstanceId=([a-f0-9-]+)/i);
-                        if (match2) return match2[1];
-                        const text = await res.text();
-                        const match3 = text.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
-                        if (match3) return match3[1];
-                    } catch(e) {
-                        console.log('Fetch error:', e.message);
-                    }
+                    // Link directo
+                    const match2 = component.url.match(/gameInstanceId=([a-f0-9-]{36})/i);
+                    if (match2) return match2[1];
                 }
             }
         }
     }
+    // Buscar en embeds
     if (message.embeds && message.embeds.length > 0) {
         for (const embed of message.embeds) {
-            const text = (embed.description || '') + JSON.stringify(embed.fields || []) + (embed.title || '');
-            const match = text.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+            const text = JSON.stringify(embed);
+            const decoded = decodeURIComponent(text);
+            const match = decoded.match(/gameInstanceId=([a-f0-9-]{36})/i);
             if (match) return match[1];
+            const match2 = decoded.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+            if (match2) return match2[1];
         }
     }
     return null;

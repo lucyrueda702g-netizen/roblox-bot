@@ -63,51 +63,119 @@ async function saveToJsonbin(serverList) {
     console.log('Jsonbin save:', res.status, data.metadata ? 'OK' : JSON.stringify(data));
 }
 
+// ─── FUNCIÓN ARREGLADA ───────────────────────────────────────────────
 async function extractServerID(message) {
-    // Debug completo
-    console.log('Components raw:', JSON.stringify(message.components));
-    console.log('Embeds raw:', JSON.stringify(message.embeds));
+    const UUID_REGEX = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i;
 
-    // Buscar en botones
+    // Función helper: intenta extraer UUID de un string con múltiples decodings
+    function findUUID(raw) {
+        if (!raw) return null;
+
+        // Intentar hasta 3 niveles de URL decode
+        let texts = [raw];
+        let current = raw;
+        for (let i = 0; i < 3; i++) {
+            try {
+                const decoded = decodeURIComponent(current);
+                if (decoded !== current) {
+                    texts.push(decoded);
+                    current = decoded;
+                } else break;
+            } catch { break; }
+        }
+
+        for (const text of texts) {
+            // Buscar gameInstanceId= primero (más específico)
+            const match = text.match(/gameInstanceId=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+            if (match) {
+                console.log('✅ Found via gameInstanceId=', match[1]);
+                return match[1];
+            }
+        }
+
+        // Si hay un link= o redirect= que apunta a roblox, extraer de ahí
+        for (const text of texts) {
+            const linkMatch = text.match(/(?:link|redirect|url)=([^&\s]+)/i);
+            if (linkMatch) {
+                const innerResult = findUUID(linkMatch[1]);
+                if (innerResult) return innerResult;
+            }
+        }
+
+        // Último recurso: cualquier UUID en el texto decodificado completamente
+        const lastText = texts[texts.length - 1];
+        // Solo si menciona roblox cerca del UUID
+        if (lastText.toLowerCase().includes('roblox')) {
+            const match = lastText.match(UUID_REGEX);
+            if (match) {
+                console.log('✅ Found via fallback UUID in roblox context:', match[1]);
+                return match[1];
+            }
+        }
+
+        return null;
+    }
+
+    // 1. Buscar en componentes (botones)
     if (message.components && message.components.length > 0) {
         for (const row of message.components) {
             const comps = row.components || [];
-            for (const component of comps) {
-                const url = component.url || component.data?.url || '';
+            for (const comp of comps) {
+                // discord.js v14 puede tener la URL en diferentes lugares
+                const url = comp.url 
+                    || comp.data?.url 
+                    || comp.toJSON?.()?.url 
+                    || '';
+                
                 if (url) {
-                    console.log('Button URL:', url);
-                    const decoded = decodeURIComponent(url);
-                    console.log('Decoded URL:', decoded);
-                    const match = decoded.match(/gameInstanceId=([a-f0-9-]{36})/i);
-                    if (match) return match[1];
-                    const match2 = url.match(/gameInstanceId=([a-f0-9-]{36})/i);
-                    if (match2) return match2[1];
+                    console.log('🔍 Button URL encontrada:', url.substring(0, 100) + '...');
+                    const result = findUUID(url);
+                    if (result) return result;
                 }
             }
         }
     }
 
-    // Buscar en embeds
+    // 2. Buscar en embeds (description, fields, url, author)
     if (message.embeds && message.embeds.length > 0) {
         for (const embed of message.embeds) {
-            const text = JSON.stringify(embed);
-            const decoded = decodeURIComponent(text);
-            const match = decoded.match(/gameInstanceId=([a-f0-9-]{36})/i);
-            if (match) return match[1];
-            const match2 = decoded.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
-            if (match2) return match2[1];
+            // Revisar cada parte del embed por separado
+            const parts = [
+                embed.description,
+                embed.url,
+                embed.title,
+                ...(embed.fields || []).map(f => f.value),
+                embed.author?.url,
+                embed.footer?.text,
+            ].filter(Boolean);
+
+            for (const part of parts) {
+                const result = findUUID(part);
+                if (result) return result;
+            }
+
+            // También serializar el embed completo como JSON
+            const embedJson = JSON.stringify(embed);
+            const result = findUUID(embedJson);
+            if (result) return result;
         }
     }
 
-    // Buscar en content
+    // 3. Buscar en content del mensaje
     if (message.content) {
-        const decoded = decodeURIComponent(message.content);
-        const match = decoded.match(/gameInstanceId=([a-f0-9-]{36})/i);
-        if (match) return match[1];
+        const result = findUUID(message.content);
+        if (result) return result;
     }
+
+    // 4. Log de debug si no encontró nada
+    console.log('❌ No UUID found. Components JSON:');
+    console.log(JSON.stringify(message.components?.map(r => 
+        r.components?.map(c => ({ url: c.url || c.data?.url }))
+    )));
 
     return null;
 }
+// ─────────────────────────────────────────────────────────────────────
 
 function extractBrainrot(message) {
     if (message.embeds && message.embeds.length > 0) {
@@ -115,9 +183,11 @@ function extractBrainrot(message) {
         const desc = embed.description || embed.title || '';
         const lines = desc.split('\n');
         if (lines.length > 0) {
-            const match = lines[0].match(/^(.+?)\s*—/);
-            if (match) return match[1].trim();
+            const match = lines[0].match(/^\*{0,2}(.+?)\s*[—\-–]/);
+            if (match) return match[1].replace(/\*/g, '').trim();
         }
+        // Fallback: primera línea limpia
+        if (lines[0]) return lines[0].replace(/\*/g, '').trim().substring(0, 40);
     }
     return "Brainrot detectado";
 }
@@ -126,8 +196,8 @@ function extractCash(message) {
     if (message.embeds && message.embeds.length > 0) {
         const embed = message.embeds[0];
         const desc = embed.description || '';
-        const match = desc.match(/\$([0-9,.]+[MBKTQmbtq]?)\/s/i);
-        if (match) return match[1];
+        const match = desc.match(/\$([0-9,.\s]+[MBKTQmbtq]?)\/s/i);
+        if (match) return match[1].trim();
     }
     return "?";
 }
@@ -163,9 +233,9 @@ async function sendToMyChannel(serverID, brainrot, cash) {
         );
 
         await channel.send({ embeds: [embed], components: [row] });
-        console.log('Sent to my channel:', brainrot, serverID);
+        console.log('✅ Sent to channel:', brainrot, serverID);
     } catch (err) {
-        console.error('Error sending to channel:', err.message);
+        console.error('❌ Error sending to channel:', err.message);
     }
 }
 
@@ -173,18 +243,18 @@ client.on('messageCreate', async (message) => {
     if (message.channelId !== SAB_CHANNEL_ID) return;
     if (!message.author.bot) return;
 
-    console.log('SAB message received from:', message.author.username);
+    console.log('📨 SAB message received from:', message.author.username);
 
     const serverID = await extractServerID(message);
     if (!serverID) {
-        console.log('No server ID found in message');
+        console.log('⚠️ No server ID found — skipping');
         return;
     }
 
     const brainrot = extractBrainrot(message);
     const cash = extractCash(message);
 
-    console.log('Found:', brainrot, cash, serverID);
+    console.log('📦 Found:', brainrot, cash, serverID);
 
     await saveToJsonbin([{
         id: serverID,
@@ -265,7 +335,7 @@ async function scanAndPost() {
 }
 
 client.once('ready', () => {
-    console.log(`Bot listo: ${client.user.tag}`);
+    console.log(`✅ Bot listo: ${client.user.tag}`);
     scanAndPost();
     setInterval(scanAndPost, 1 * 60 * 1000);
 });

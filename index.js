@@ -64,27 +64,20 @@ async function saveToJsonbin(serverList) {
 }
 
 async function extractServerID(message) {
-    // Buscar en botones
     if (message.components && message.components.length > 0) {
         for (const row of message.components) {
             for (const component of row.components) {
                 if (component.url) {
-                    // Link directo con gameInstanceId
                     const match = component.url.match(/gameInstanceId=([a-f0-9-]+)/i);
                     if (match) return match[1];
-                    // Link de SAB tipo roblox.com/games/start
-                    const match2 = component.url.match(/roblox\.com\/games\/start.*gameInstanceId=([a-f0-9-]+)/i);
-                    if (match2) return match2[1];
-                    // Fetch el link para obtener redirect
                     try {
                         const res = await fetch(component.url, { method: 'GET', redirect: 'follow' });
                         const finalUrl = res.url;
-                        const match3 = finalUrl.match(/gameInstanceId=([a-f0-9-]+)/i);
-                        if (match3) return match3[1];
-                        // Buscar en el body
+                        const match2 = finalUrl.match(/gameInstanceId=([a-f0-9-]+)/i);
+                        if (match2) return match2[1];
                         const text = await res.text();
-                        const match4 = text.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
-                        if (match4) return match4[1];
+                        const match3 = text.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+                        if (match3) return match3[1];
                     } catch(e) {
                         console.log('Fetch error:', e.message);
                     }
@@ -92,7 +85,6 @@ async function extractServerID(message) {
             }
         }
     }
-    // Buscar UUID en embeds
     if (message.embeds && message.embeds.length > 0) {
         for (const embed of message.embeds) {
             const text = (embed.description || '') + JSON.stringify(embed.fields || []) + (embed.title || '');
@@ -101,7 +93,8 @@ async function extractServerID(message) {
         }
     }
     return null;
-                }
+}
+
 function extractBrainrot(message) {
     if (message.embeds && message.embeds.length > 0) {
         const embed = message.embeds[0];
@@ -119,7 +112,7 @@ function extractCash(message) {
     if (message.embeds && message.embeds.length > 0) {
         const embed = message.embeds[0];
         const desc = embed.description || '';
-        const match = desc.match(/\$([0-9,.]+[MBK]?)\/s/i);
+        const match = desc.match(/\$([0-9,.]+[MBKTQmbtq]?)\/s/i);
         if (match) return match[1];
     }
     return "?";
@@ -134,7 +127,7 @@ async function sendToMyChannel(serverID, brainrot, cash) {
 
         const embed = new EmbedBuilder()
             .setColor(0x00CC44)
-            .setTitle(`⚡ ${brainrot} [$${cash}/s]`)
+            .setTitle(`🎯 SAB: ${brainrot} [$${cash}/s]`)
             .addFields(
                 { name: 'ENTRAR AL SERVIDOR', value: `[UNIRSE](${joinURL})`, inline: false },
                 { name: 'Estado base', value: '```\nSeguro\n```', inline: false },
@@ -168,7 +161,7 @@ client.on('messageCreate', async (message) => {
 
     console.log('SAB message received from:', message.author.username);
 
-    const serverID = extractServerID(message);
+    const serverID = await extractServerID(message);
     if (!serverID) {
         console.log('No server ID found in message');
         return;
@@ -241,7 +234,6 @@ async function scanAndPost() {
         );
 
         await channel.send({ embeds: [embed], components: [row] });
-
         await saveToJsonbin(sorted.slice(0, 3).map(s => ({
             id: s.id,
             brainrot: "Detectando...",

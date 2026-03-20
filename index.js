@@ -63,29 +63,45 @@ async function saveToJsonbin(serverList) {
     console.log('Jsonbin save:', res.status, data.metadata ? 'OK' : JSON.stringify(data));
 }
 
-function extractServerID(message) {
+async function extractServerID(message) {
+    // Buscar en botones
     if (message.components && message.components.length > 0) {
         for (const row of message.components) {
             for (const component of row.components) {
                 if (component.url) {
+                    // Link directo con gameInstanceId
                     const match = component.url.match(/gameInstanceId=([a-f0-9-]+)/i);
                     if (match) return match[1];
+                    // Link de SAB tipo roblox.com/games/start
+                    const match2 = component.url.match(/roblox\.com\/games\/start.*gameInstanceId=([a-f0-9-]+)/i);
+                    if (match2) return match2[1];
+                    // Fetch el link para obtener redirect
+                    try {
+                        const res = await fetch(component.url, { method: 'GET', redirect: 'follow' });
+                        const finalUrl = res.url;
+                        const match3 = finalUrl.match(/gameInstanceId=([a-f0-9-]+)/i);
+                        if (match3) return match3[1];
+                        // Buscar en el body
+                        const text = await res.text();
+                        const match4 = text.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+                        if (match4) return match4[1];
+                    } catch(e) {
+                        console.log('Fetch error:', e.message);
+                    }
                 }
             }
         }
     }
+    // Buscar UUID en embeds
     if (message.embeds && message.embeds.length > 0) {
         for (const embed of message.embeds) {
-            const text = (embed.description || '') + JSON.stringify(embed.fields || []);
+            const text = (embed.description || '') + JSON.stringify(embed.fields || []) + (embed.title || '');
             const match = text.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
             if (match) return match[1];
         }
     }
-    const match = message.content.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
-    if (match) return match[1];
     return null;
-}
-
+                }
 function extractBrainrot(message) {
     if (message.embeds && message.embeds.length > 0) {
         const embed = message.embeds[0];

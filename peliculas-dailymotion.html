@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADRI4NCITO TV</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        header {
+            background: #0a0e27;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            background: linear-gradient(90deg, #9333ea, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-icons {
+            display: flex;
+            gap: 16px;
+            font-size: 20px;
+        }
+
+        /* Search Bar */
+        .search-bar {
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 16px;
+            border-radius: 50px;
+        }
+
+        .search-bar input {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 14px;
+            flex: 1;
+            outline: none;
+        }
+
+        .search-bar input::placeholder {
+            color: rgba(255,255,255,0.5);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            padding: 0 16px;
+            gap: 32px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            overflow-x: auto;
+            scroll-behavior: smooth;
+        }
+
+        .tab {
+            padding: 16px 0;
+            border: none;
+            background: none;
+            color: rgba(255,255,255,0.5);
+            font-size: 16px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .tab.active {
+            color: #fff;
+            border-bottom-color: #5b21b6;
+        }
+
+        /* Carousel */
+        .carousel {
+            position: relative;
+            height: 300px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            margin: 16px;
+            border-radius: 12px;
+        }
+
+        .carousel-item {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #5b21b6, #ec4899);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 80px;
+            border-radius: 12px;
+        }
+
+        .carousel-item.active {
+            display: flex;
+        }
+
+        .carousel-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            padding: 16px;
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.4);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .dot.active {
+            background: #fff;
+            width: 24px;
+            border-radius: 4px;
+        }
+
+        /* Main Container */
+        .container {
+            padding: 0 0 100px 0;
+        }
+
+        /* Section */
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 16px;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .section-more {
+            font-size: 24px;
+            cursor: pointer;
+            color: rgba(255,255,255,0.5);
+        }
+
+        /* Grid */
+        .movies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 12px;
+            padding: 0 12px;
+        }
+
+        .movie-card {
+            cursor: pointer;
+            transition: transform 0.3s, filter 0.3s;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .movie-card:hover {
+            transform: scale(1.05);
+            filter: brightness(1.2);
+        }
+
+        .movie-poster {
+            width: 100%;
+            aspect-ratio: 2/3;
+            background: linear-gradient(135deg, #5b21b6, #ec4899);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .movie-title {
+            font-size: 12px;
+            margin-top: 8px;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            align-items: flex-end;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 100%;
+            background: #0a0e27;
+            border-radius: 20px 20px 0 0;
+            padding: 24px;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .modal-video {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .modal-video iframe {
+            width: 100%;
+            height: 100%;
+        }
+
+        .modal-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+
+        .modal-meta {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .modal-description {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #9333ea, #ec4899);
+            color: #fff;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.95);
+        }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background: #0a0e27;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0;
+            z-index: 100;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: rgba(255,255,255,0.5);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .nav-item.active {
+            color: #5b21b6;
+        }
+
+        .nav-icon {
+            font-size: 24px;
+        }
+
+        /* No Results */
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255,255,255,0.5);
+            font-size: 16px;
+        }
+
+        @media (max-width: 640px) {
+            .carousel {
+                height: 200px;
+            }
+
+            .movies-grid {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            }
+
+            .section-title {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="logo">ADRI4NCITO TV</div>
+        <div class="header-icons">
+            <span>🔍</span>
+            <span>⏰</span>
+        </div>
+    </header>
+
+    <!-- Search -->
+    <div class="search-bar">
+        <span>🔍</span>
+        <input type="text" id="searchInput" placeholder="Busca películas..." onkeyup="handleSearch()">
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" id="tabsContainer"></div>
+
+    <!-- Carousel -->
+    <div class="carousel" id="carousel">
+        <div class="carousel-dots" id="dots"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container" id="mainContainer"></div>
+
+    <!-- Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-video" id="modalVideo"></div>
+            <div class="modal-title" id="modalTitle"></div>
+            <div class="modal-meta">
+                <span id="modalYear"></span>
+                <span id="modalGenre"></span>
+                <span id="modalRating">⭐ 8.5</span>
+            </div>
+            <div class="modal-description" id="modalDescription"></div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary">▶️ Reproducir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav">
+        <div class="nav-item active" onclick="activeNav(0)">
+            <div class="nav-icon">🏠</div>
+            <div>Inicio</div>
+        </div>
+        <div class="nav-item" onclick="activeNav(1)">
+            <div class="nav-icon">📺</div>
+            <div>Géneros</div>
+        </div>
+        <div class="nav-item" onclick="activeNav(2)">
+            <div class="nav-icon">❤️</div>
+            <div>Favoritos</div>
+        </div>
+        <div class="nav-item" onclick="activeNav(3)">
+            <div class="nav-icon">👤</div>
+            <div>Perfil</div>
+        </div>
+    </div>
+
+    <script>
+        const movies = [
+            { id: 1, title: "Michael Jackson Historia", dailymotionId: "xa7moey", poster: "🎤", genre: "Documental", year: 2023, rating: 9.0, description: "La historia completa de Michael Jackson, el Rey del Pop" },
+            { id: 2, title: "Un Asesino a Sueldo Cae en una Trampa Mortal", dailymotionId: "x98kvfi", poster: "🔫", genre: "Acción", year: 2024, rating: 8.7, description: "Acción | Suspenso | Película Completa Español Latino" },
+            { id: 3, title: "La Profecía del Juicio Final", dailymotionId: "x9977ti", poster: "⚡", genre: "Thriller", year: 2024, rating: 8.5, description: "PELÍCULA COMPLETA ESPAÑOL - Un futuro incierto lleno de misterio" },
+            { id: 4, title: "El Prisionero Recién Llegado", dailymotionId: "x9901ze", poster: "🔗", genre: "Drama", year: 2024, rating: 8.3, description: "PELÍCULA COMPLETA ESPAÑOL LATINO - Lucha por la supervivencia" },
+            { id: 5, title: "Bienvenidos al infierno", dailymotionId: "x9m0fik", poster: "🔥", genre: "Horror", year: 2024, rating: 8.6, description: "ESTRENO PELÍCULA TERROR - Un viaje al infierno" },
+            { id: 6, title: "La sangrienta lucha de los bandidos", dailymotionId: "x98l1xg", poster: "⚔️", genre: "Acción", year: 2024, rating: 8.4, description: "PELÍCULA COMPLETA ESPAÑOL - Crimen y violencia" },
+            { id: 7, title: "Se Ven Obligados A Luchar", dailymotionId: "x9c00gi", poster: "🏝️", genre: "Aventura", year: 2024, rating: 8.2, description: "NUEVA PELÍCULA LATINO - Supervivencia" },
+            { id: 8, title: "Cada uno de sus pasos", dailymotionId: "x992eco", poster: "👣", genre: "Thriller", year: 2024, rating: 8.1, description: "PELÍCULA COMPLETA ESPAÑOL - De misterio y peligro" },
+            { id: 9, title: "La mejor película de terror", dailymotionId: "x98do4c", poster: "😱", genre: "Horror", year: 2024, rating: 8.8, description: "ESTRENO PELÍCULA TERROR ESPAÑOL - Puro horror" },
+            { id: 10, title: "El rostro del diablo", dailymotionId: "x8y5hto", poster: "😈", genre: "Horror", year: 2024, rating: 8.6, description: "PELÍCULA COMPLETA ESPAÑOL LATINO - El mal encarnado" },
+            { id: 11, title: "El Asesino Silencioso", dailymotionId: "x9a483o", poster: "🔪", genre: "Thriller", year: 2024, rating: 8.5, description: "ESTRENO THRILLER ESPAÑOL - Un criminal sin escrúpulos" },
+            { id: 12, title: "Historias de Fantasmas Reales", dailymotionId: "x967vku", poster: "👻", genre: "Horror", year: 2024, rating: 8.0, description: "PELÍCULA DE TERROR 2024 - Encuentros paranormales" },
+            { id: 13, title: "Justicia Vigilante", dailymotionId: "x98h8e8", poster: "🦇", genre: "Acción", year: 2024, rating: 8.6, description: "NUEVA PELÍCULA DE ACCIÓN - Un vigilante nocturno" },
+            { id: 14, title: "El Último Ultimátum", dailymotionId: "x98nwh4", poster: "⏰", genre: "Suspenso", year: 2024, rating: 8.3, description: "ESTRENO 2024 - Cuenta regresiva mortal" },
+            { id: 15, title: "Secretos Bajo el Mar", dailymotionId: "x98b3ly", poster: "🌊", genre: "Aventura", year: 2024, rating: 8.2, description: "PELÍCULA COMPLETA ESPAÑOL - Buceo profundo" },
+            { id: 16, title: "Ella Era Diferente", dailymotionId: "x9hkv9u", poster: "✨", genre: "Drama", year: 2024, rating: 8.1, description: "NUEVA PELÍCULA LATINO - Historia emotiva" },
+            { id: 17, title: "Código Rojo", dailymotionId: "x8mhhgo", poster: "🎯", genre: "Acción", year: 2024, rating: 8.7, description: "ESTRENO ACCIÓN - Misión imposible" },
+            { id: 18, title: "La Bruja del Bosque", dailymotionId: "x9a4yls", poster: "🧙‍♀️", genre: "Horror", year: 2024, rating: 8.3, description: "PELÍCULA DE TERROR 2024 - Bosque maldito" },
+            { id: 19, title: "Triángulo Amoroso", dailymotionId: "x9o8q1y", poster: "💕", genre: "Romance", year: 2024, rating: 7.8, description: "ESTRENO PELÍCULA LATINO - Amor explosivo" },
+            { id: 20, title: "El Juicio Final", dailymotionId: "x8xs7t8", poster: "⚖️", genre: "Drama", year: 2024, rating: 8.4, description: "NUEVA PELÍCULA 2024 - Un juicio revelador" },
+            { id: 21, title: "Poderes Sobrenaturales", dailymotionId: "x8xhoc6", poster: "⚡", genre: "Ciencia Ficción", year: 2024, rating: 8.5, description: "ESTRENO CIENCIA FICCIÓN - Poderes despertados" },
+            { id: 22, title: "TERRIFIER 1 PELICULA EN ESPAÑOL", dailymotionId: "x920bzm", poster: "😱", genre: "Horror", year: 2024, rating: 8.9, description: "PELÍCULA COMPLETA ESPAÑOL - El película de horror más aterradora" },
+            { id: 23, title: "Demonios Desatados", dailymotionId: "x9ivlpo", poster: "😈", genre: "Horror", year: 2024, rating: 8.4, description: "NUEVA PELÍCULA DE TERROR - Ritual antiguo" },
+            { id: 24, title: "Rebelde sin Causa", dailymotionId: "x97ppsy", poster: "🎸", genre: "Drama", year: 2024, rating: 7.9, description: "ESTRENO DRAMA LATINO - Juventud rebelde" },
+            { id: 25, title: "Persecución a Muerte", dailymotionId: "x900jce", poster: "🏃", genre: "Acción", year: 2024, rating: 8.5, description: "PELÍCULA DE ACCIÓN 2024 - Persecución" },
+            { id: 26, title: "El Espejo Maldito", dailymotionId: "x9jp6h0", poster: "🪞", genre: "Horror", year: 2024, rating: 8.2, description: "ESTRENO PELÍCULA TERROR - Espejo antiguo" },
+            { id: 27, title: "Amor en las Redes", dailymotionId: "x8yhef0", poster: "📱", genre: "Romance", year: 2024, rating: 7.7, description: "NUEVA PELÍCULA LATINO - Amor virtual" },
+            { id: 28, title: "Explosión Apocalíptica", dailymotionId: "x97gpna", poster: "🌋", genre: "Acción", year: 2024, rating: 8.6, description: "PELÍCULA ACCIÓN 2024 - Catástrofe" },
+            { id: 29, title: "El Pacto Oscuro", dailymotionId: "x9i716q", poster: "🤝", genre: "Thriller", year: 2024, rating: 8.3, description: "ESTRENO THRILLER ESPAÑOL - Acuerdo diabólico" },
+            { id: 30, title: "Infidelidad y Venganza", dailymotionId: "x9dt50k", poster: "💔", genre: "Drama", year: 2024, rating: 8.2, description: "NUEVA PELÍCULA LATINO - Venganza dulce" },
+            { id: 31, title: "La Conspiración Global", dailymotionId: "x9j3zry", poster: "🌍", genre: "Crimen", year: 2024, rating: 8.4, description: "PELÍCULA COMPLETA - Conspiración mundial" },
+            { id: 32, title: "Conexión Paranormal", dailymotionId: "x9gklue", poster: "📡", genre: "Horror", year: 2024, rating: 8.3, description: "ESTRENO PELÍCULA TERROR - Entidades malignas" },
+            { id: 33, title: "El Último Héroe", dailymotionId: "x983jkk", poster: "🦸", genre: "Acción", year: 2024, rating: 8.5, description: "NUEVA PELÍCULA DE ACCIÓN - Soldado solitario" },
+            { id: 34, title: "Viuda Negra Despierta", dailymotionId: "x8yxb72", poster: "🕷️", genre: "Acción", year: 2024, rating: 8.4, description: "ESTRENO ACCIÓN LATINO - Venganza final" },
+            { id: 35, title: "El Manuscrito Perdido", dailymotionId: "x9j0ciy", poster: "📜", genre: "Aventura", year: 2024, rating: 8.2, description: "PELÍCULA COMPLETA ESPAÑOL - Manuscrito secreto" },
+            { id: 36, title: "Obsesión Mortal", dailymotionId: "x9j62mw", poster: "😵", genre: "Thriller", year: 2024, rating: 8.5, description: "NUEVA PELÍCULA THRILLER - Obsesión letal" },
+            { id: 37, title: "Resurrección del Mal", dailymotionId: "x9itdg4", poster: "☠️", genre: "Horror", year: 2024, rating: 8.3, description: "ESTRENO PELÍCULA TERROR - Lo enterrado regresa" },
+            { id: 38, title: "Deuda de Sangre", dailymotionId: "x92ke2g", poster: "🩸", genre: "Crimen", year: 2024, rating: 8.6, description: "PELÍCULA CRIMEN 2024 - Deuda mortal" },
+            { id: 39, title: "El Experimento Prohibido", dailymotionId: "x91rteq", poster: "🔬", genre: "Ciencia Ficción", year: 2024, rating: 8.4, description: "NUEVA PELÍCULA LATINO - Experimento científico" },
+            { id: 40, title: "Noche de Vigilancia Eterna", dailymotionId: "x8zsj4i", poster: "🌙", genre: "Horror", year: 2024, rating: 8.3, description: "ESTRENO PELÍCULA TERROR ESPAÑOL - Horrores nocturnos" },
+            { id: 41, title: "MÉXICO VS SUDAFRICA MUNDIAL 2026", dailymotionId: "xaeyj1e", poster: "🇲🇽🥊🇿🇦", genre: "Deportes", year: 2026, rating: 9.0, description: "MUNDIAL 2026 - Partido completo en español. México vs Sudáfrica" },
+            { id: 42, title: "Costa de Marfil 1 - 0 Ecuador | Mundial 2026", dailymotionId: "xag5w3y", poster: "🇨🇮🥊🇪🇨", genre: "Deportes", year: 2026, rating: 8.8, description: "MUNDIAL 2026 - Grupo E Fecha 1. Costa de Marfil vs Ecuador en español" },
+            { id: 43, title: "Bélgica vs Irán Mundial 2026", dailymotionId: "xahno5i", poster: "🇧🇪🥊🇮🇷", genre: "Deportes", year: 2026, rating: 8.9, description: "MUNDIAL 2026 - Bélgica vs Irán. Partido completo en español" },
+            { id: 44, title: "Alemania vs Costa de Marfil MUNDIAL 2026", dailymotionId: "xahhbti", poster: "🇩🇪🥊🇨🇮", genre: "Deportes", year: 2026, rating: 8.9, description: "MUNDIAL 2026 - Alemania vs Costa de Marfil. Partido completo en español" }
+        ];
+
+        const genres = ["Recomendado", "Acción", "Terror", "Drama", "Thriller", "Deportes"];
+        let currentCarouselIndex = 0;
+
+        function init() {
+            renderTabs();
+            renderCarousel();
+            renderMovies();
+        }
+
+        function renderTabs() {
+            const tabsContainer = document.getElementById('tabsContainer');
+            tabsContainer.innerHTML = genres.map((genre, i) => `
+                <button class="tab ${i === 0 ? 'active' : ''}" onclick="filterByGenre('${genre}', this)">
+                    ${genre}
+                </button>
+            `).join('');
+        }
+
+        function renderCarousel() {
+            const carousel = document.getElementById('carousel');
+            const dots = document.getElementById('dots');
+            
+            const carouselItems = movies.slice(0, 4);
+            carousel.innerHTML = carouselItems.map((m, i) => `
+                <div class="carousel-item ${i === 0 ? 'active' : ''}" style="background: linear-gradient(135deg, #5b21b6, #ec4899); font-size: 80px;">
+                    ${m.poster}
+                </div>
+            `).join('');
+
+            dots.innerHTML = carouselItems.map((_, i) => `
+                <div class="dot ${i === 0 ? 'active' : ''}" onclick="changeCarousel(${i})"></div>
+            `).join('');
+
+            setInterval(() => {
+                currentCarouselIndex = (currentCarouselIndex + 1) % carouselItems.length;
+                changeCarousel(currentCarouselIndex);
+            }, 5000);
+        }
+
+        function changeCarousel(index) {
+            currentCarouselIndex = index;
+            document.querySelectorAll('.carousel-item').forEach((item, i) => {
+                item.classList.toggle('active', i === index);
+            });
+            document.querySelectorAll('.dot').forEach((dot, i) => {
+                dot.classList.toggle('active', i === index);
+            });
+        }
+
+        function renderMovies(moviesToRender = movies) {
+            const container = document.getElementById('mainContainer');
+            
+            if (moviesToRender.length === 0) {
+                container.innerHTML = '<div class="no-results">No se encontraron películas</div>';
+                return;
+            }
+
+            const sections = {
+                'Superados': moviesToRender.slice(0, 3),
+                'Nuevos': moviesToRender.slice(3, 11),
+                'Populares': moviesToRender.slice(11, 20),
+                'Recomendados': moviesToRender.slice(20, 28)
+            };
+
+            container.innerHTML = Object.entries(sections).map(([title, items]) => `
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">${title}</div>
+                        <div class="section-more">⋯</div>
+                    </div>
+                    <div class="movies-grid">
+                        ${items.map(movie => `
+                            <div onclick="openModal(${movie.id})">
+                                <div class="movie-card">
+                                    <div class="movie-poster">${movie.poster}</div>
+                                    <div class="movie-title">${movie.title}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterByGenre(genre, btn) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+
+            if (genre === 'Recomendado') {
+                renderMovies(movies);
+            } else {
+                const filtered = movies.filter(m => m.genre.includes(genre));
+                renderMovies(filtered);
+            }
+        }
+
+        function handleSearch() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            if (!term) {
+                renderMovies(movies);
+                return;
+            }
+            const filtered = movies.filter(m => m.title.toLowerCase().includes(term));
+            renderMovies(filtered);
+        }
+
+        function openModal(movieId) {
+            const movie = movies.find(m => m.id === movieId);
+            if (!movie) return;
+
+            document.getElementById('modalTitle').textContent = movie.title;
+            document.getElementById('modalYear').textContent = `${movie.year}`;
+            document.getElementById('modalGenre').textContent = movie.genre;
+            document.getElementById('modalRating').textContent = `⭐ ${movie.rating}`;
+            document.getElementById('modalDescription').textContent = movie.description;
+            document.getElementById('modalVideo').innerHTML = `
+                <iframe src="https://www.dailymotion.com/embed/video/${movie.dailymotionId}" allow="autoplay; encrypted-media"></iframe>
+            `;
+            
+            document.getElementById('modal').classList.add('active');
+        }
+
+        document.getElementById('modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('active');
+            }
+        });
+
+        function activeNav(index) {
+            document.querySelectorAll('.nav-item').forEach((item, i) => {
+                item.classList.toggle('active', i === index);
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
